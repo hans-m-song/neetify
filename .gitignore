@@ -1,0 +1,9 @@
+.DS_Store
+orgs
+.memsearch
+resume*
+jobs.yaml
+jobs.md
+user.md
+brag-doc.md
+.claude/memory/

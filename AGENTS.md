@@ -1,6 +1,12 @@
 # Project — job-search workspace
 
-A job-search workspace: capture roles, draft and review cover letters, track a pipeline. **The user's profile, employer history, honesty facts, and filters live in `user.md` (gitignored, not shared)** — read it first for anything fit-, letter-, or search-related. Personal data (`user.md`, `jobs.yaml`, `jobs.md`, `brag-doc.md`, `resume*`, `orgs/`) is gitignored; the tracked, shareable part is the tooling (`CLAUDE.md`, `.claude/skills/`, `render.sh`, `viewer/`).
+> **Agent-agnostic.** This file (`AGENTS.md`) is the canonical instruction set, following the
+> cross-agent `AGENTS.md` convention. `CLAUDE.md` is a thin pointer to it so Claude Code loads the
+> same file every other agent reads. Where a step needs an agent capability (subagents, browser
+> automation, a memory store), it is described by capability, not by a specific tool name — use
+> whatever your agent provides, or do the step inline.
+
+A job-search workspace: capture roles, draft and review cover letters, track a pipeline. **The user's profile, employer history, honesty facts, and filters live in `user.md` (gitignored, not shared)** — read it first for anything fit-, letter-, or search-related. Personal data (`user.md`, `jobs.yaml`, `jobs.md`, `brag-doc.md`, `resume*`, `orgs/`) is gitignored; the tracked, shareable part is the tooling (`AGENTS.md`, `playbooks/`, `render.sh`, `viewer/`).
 
 ## Read first
 
@@ -20,11 +26,12 @@ All pipeline state (status / tier / culture per role) lives **only** in `jobs.ya
 ├── brag-doc.md                     the user's STAR accomplishments — raw material for letters       [gitignored]
 ├── render.sh                       ./render.sh <org> [file] — compile PDF (auto two-pass if the .tex imports lastpage)
 ├── resume.tex                      canonical resume                                                [gitignored]
+├── playbooks/                      self-contained procedures for the recurring actions (agent-neutral)
 ├── viewer/                         local markdown viewer app (node viewer/server.mjs → :8787)
 └── orgs/<company>/                 per-company JDs, letters, notes, reviews                         [gitignored]
     ├── cover_letter.tex            drafted letter (LaTeX)
     ├── cover_letter.pdf            compiled when ready
-    ├── feedback_NNN.md             Opus-recruiter review artifact (sequential)
+    ├── feedback_NNN.md             recruiter cold-read review artifact (sequential)
     ├── notes.md                    per-company culture + cover-letter disposition (in-play companies)
     ├── *.legacy.md                 older raw-scrape JD preserved alongside canonical
     └── <role-slug>.md              canonical JD with frontmatter
@@ -42,16 +49,17 @@ IC with mid/intermediate also in scope; remote-AU preferred, local-hybrid otherw
 target, never a floor; soft-avoid AI-core core products; Go is a sought direction (personal-only today,
 frame honestly); plus per-user hard-excludes.
 
-## Skills (`.claude/skills/`)
+## Playbooks (`playbooks/`)
 
-Project-scoped skills wrap the recurring actions; each is a self-contained checklist that references
-the rules below + the memories (no rule duplication). Invoke with `/<name>`:
+Each recurring action is a self-contained procedure in `playbooks/`. They reference the rules below +
+the notes (no rule duplication). Read and follow `playbooks/<name>.md` to run one. If your agent
+supports named commands or skills, you can wire these files up as commands; nothing depends on it.
 
-- `/job-status` — log a pipeline status change ("X applied", "rejected by X") to `jobs.yaml` + handoff.
-- `/assess-lead` — triage a pasted URL/company: check-existing, read JD, fit vs filters, flag + link.
-- `/cover-letter` — full pipeline: capture JD → culture → draft → `/recruiter-review` → edit → `render.sh` → log.
-- `/recruiter-review` — Opus cold recruiter read of a letter or resume → `feedback_NNN.md`.
-- `/job-search` — LinkedIn + Seek passes (with the query gotchas) and triage new leads vs the board.
+- `playbooks/job-status.md` — log a pipeline status change ("X applied", "rejected by X") to `jobs.yaml` + notes.
+- `playbooks/assess-lead.md` — triage a pasted URL/company: check-existing, read JD, fit vs filters, flag + link.
+- `playbooks/cover-letter.md` — full pipeline: capture JD → culture → draft → recruiter-review → edit → `render.sh` → log.
+- `playbooks/recruiter-review.md` — cold recruiter read of a letter or resume → `feedback_NNN.md`.
+- `playbooks/job-search.md` — LinkedIn + Seek passes (with the query gotchas) and triage new leads vs the board.
 
 ## Workflows
 
@@ -59,16 +67,18 @@ the rules below + the memories (no rule duplication). Invoke with `/<name>`:
 
 Use the repo wrapper: `./render.sh <org> [filename]` (filename defaults to `cover_letter.tex`). It runs the Docker `texlive/texlive` build against `orgs/<org>/` and cleans `.aux`/`.log`/`.out`/`texput.log` on success, keeping them on failure (the `zsh -e` shebang aborts before cleanup). **Pass count is auto-detected from the source: if the `.tex` imports `lastpage` it runs `pdflatex` twice** (resolving `\pageref{LastPage}` so the "N of M" footer renders), else once. This works in any folder, so an org-folder résumé variant (e.g. `orgs/dabble/resume.tex`) two-passes correctly; cover letters don't import `lastpage` and stay single-pass. `./render.sh resume` is the special case that compiles the repo-root `resume.tex`. Always use the wrapper, not raw `docker ... pdflatex`; extend the wrapper if it can't express what's needed.
 
-### Recruiter-feedback review (subagent variant)
+### Recruiter-feedback review (reviewer-pass variant)
 
 For each drafted cover letter:
 
-1. Spawn Opus subagent (Agent tool, `subagent_type: "general-purpose"`, `model: "opus"`) with recruiter-role prompt for the specific company and role
-2. Subagent reads JD + resume + cover letter, then writes `feedback_NNN.md` (sequential) to that org's folder
+1. Run a cold-read reviewer pass with a recruiter-role prompt for the specific company and role. If your
+   agent supports subagents, spawn one (a capable model, general-purpose role); otherwise run the review
+   inline as a separate pass kept blind to any prior feedback.
+2. The reviewer reads JD + resume + cover letter, then writes `feedback_NNN.md` (sequential) to that org's folder
 3. Apply phrase-level edits that strengthen without overclaiming; **skip edits requiring user-confirmation** (overclaim risk, salary positioning, unverified facts)
 4. Track each letter's status in the org's `orgs/<company>/notes.md` (`## Cover letter` section): verdict, applied edits, skipped items, open questions
 
-Original variant: write feedback statically, user applies edits — still valid when user wants to drive iteration manually. See memory `feedback_application_review_protocol.md`.
+Original variant: write feedback statically, user applies edits — still valid when user wants to drive iteration manually. See note `.claude/memory/feedback_application_review_protocol.md`.
 
 ### Pipeline tracking
 
@@ -81,7 +91,7 @@ Update the role's entry in `jobs.yaml` whenever:
 
 `jobs.md` only changes when a prose decision changes (RESOLVED/STILL-OPEN), not for per-role status.
 
-## Writing style (canonical: memory `feedback_writing_style.md`)
+## Writing style (canonical: note `.claude/memory/feedback_writing_style.md`)
 
 - No em-dashes
 - No AI tells (rule-of-three triplets, tidy parallels, clever closers, "particularly", "Beyond X,", "is one I take seriously", "force multiplier")
@@ -90,25 +100,28 @@ Update the role's entry in `jobs.yaml` whenever:
 - No quantitative outcome claims ("X dropped by Y") without a number — ask first
 - Never present personal / side projects as production experience
 - No "JD" shorthand — say "the role" or "the role description"
-- Always plan and ask confirmation before writing code (per global CLAUDE.md)
+- Always plan and ask confirmation before writing code
 
 ## Critical do's and don'ts
 
 - **DO** apply phrase-level recruiter feedback that strengthens without overclaiming
 - **DO** flag user-decision items in the org's `notes.md`; skip them in letters
-- **DO** keep the user's voice (direct, factual, low-flourish) — recruiter agent suggestions are inputs, not commands
+- **DO** keep the user's voice (direct, factual, low-flourish) — recruiter suggestions are inputs, not commands
 - **DON'T** apply edits that overclaim experience beyond what's on the resume
 - **DON'T** compile letters that have open items requiring user-confirmation in the prose
 - **DON'T** invent recommendations in cover letters — if you don't know whether a project was customer-facing, ask
+- **DON'T** read resume_pii.tex, resume.pdf, and compiled resume variants e.g. resume_sre.pdf
 
-## Memory pointers (auto-loaded)
+## Notes (`.claude/memory/`)
 
-`.claude/memory/`:
+Persistent workspace notes live in `.claude/memory/` (gitignored, personal). Agents with a memory store
+can load them automatically; otherwise read the files directly. They record hard-won rules the playbooks
+reference by name:
 
 - `feedback_writing_style.md` — AI-tell avoidance + style rules
 - `feedback_editing_latitude.md` — may change letter wording freely, never meaning/facts
 - `feedback_job_sources.md` — preferred/avoided research sources
 - `feedback_recruiter_aicore_handling.md` — don't auto-drop recruiter-posted / AI-core; flag + find underlying JD
-- `feedback_application_review_protocol.md` — review loop + subagent-recruiter variant
+- `feedback_application_review_protocol.md` — review loop + reviewer-pass variant
 - `reference_research_sources.md` — Glassdoor (authed) + au.seek.com work; Reddit blocked
 - `reference_latex_rendering.md` — `render.sh` wrapper + cleanup rules

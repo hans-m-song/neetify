@@ -14,6 +14,28 @@ const expanded = new Set();
 const ICONS = { '.md': '📄', '.txt': '📑', '.pdf': '📕', '.yaml': '🗂️', '.yml': '🗂️' };
 const escapeHtml = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
+// ---- URL <-> path ----
+// the address bar mirrors the open file/folder: /orgs/nearmap/notes.md
+const toHref = (p) => (p ? '/' + p.split('/').map(encodeURIComponent).join('/') : '/');
+const pathFromUrl = () => decodeURIComponent(location.pathname).replace(/^\/+/, '').replace(/\/+$/, '');
+
+function syncUrl(path, push) {
+  const href = toHref(path);
+  if (href === location.pathname) return;
+  const state = { path };
+  if (push) history.pushState(state, '', href);
+  else history.replaceState(state, '', href);
+}
+
+// let the browser handle modifier/middle clicks so "open in new tab" keeps working
+function navHandler(fn) {
+  return (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (e.button && e.button !== 0)) return;
+    e.preventDefault();
+    fn();
+  };
+}
+
 function splitFrontmatter(text) {
   if (!text.startsWith('---')) return { fm: null, body: text };
   const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
@@ -45,6 +67,8 @@ const sel = (s) => `[data-path="${CSS.escape(s)}"]`;
 const filtering = () => searchEl.value.trim().length > 0;
 
 // ---- jobs.yaml table ----
+// grid holds short, scannable values only — long-form fields (flags, culture_note, summary) live in
+// the per-row detail line so the table never scrolls horizontally
 const JOB_COLS = [
   { key: 'company', label: 'Company' },
   { key: 'role', label: 'Role' },
@@ -52,20 +76,66 @@ const JOB_COLS = [
   { key: 'tier', label: 'Tier' },
   { key: 'location', label: 'Location' },
   { key: 'work_mode', label: 'Mode' },
-  { key: 'culture_rating', label: 'Culture', num: true },
   { key: 'comp', label: 'Comp' },
-  { key: 'flags', label: 'Flags' },
+  { key: 'culture_rating', label: 'Culture', num: true },
 ];
 let jobsState = null;
 
+// compact form for the grid cell; the prose culture_note goes to the detail line instead
 function cultureText(j) {
-  if (j.culture_rating != null) {
-    let s = `${j.culture_rating}★`;
-    if (j.culture_recommend != null) s += ` ${j.culture_recommend}%`;
-    if (j.culture_n != null) s += ` (${j.culture_n})`;
-    return s;
-  }
-  return j.culture_note || '';
+  if (j.culture_rating == null) return '';
+  let s = `${j.culture_rating}★`;
+  if (j.culture_recommend != null) s += ` ${j.culture_recommend}%`;
+  if (j.culture_n != null) s += ` (${j.culture_n})`;
+  return s;
+}
+
+const jobKey = (j) => `${j.company || ''}|${j.role || ''}`;
+
+// stacked detail lines: flags, then culture note, then the summary that used to be a hover tooltip
+function detailHtml(j) {
+  const out = [];
+  const flags = (j.flags || []).map((f) => `<span class="flag">${escapeHtml(f)}</span>`).join(' ');
+  if (flags) out.push(`<div class="d-flags">${flags}</div>`);
+  if (j.culture_note) out.push(`<div class="d-culture">${escapeHtml(j.culture_note)}</div>`);
+  if (j.summary) out.push(`<div class="d-summary">${escapeHtml(j.summary)}</div>`);
+  return out.join('');
+}
+
+// the tree is the source of truth for existence — a stale jd_path/letter in jobs.yaml renders as
+// plain text rather than a dead link
+const hasFile = (p) => Boolean(p) && findNode(p)?.type === 'file';
+
+// jobs.yaml has no notes field; notes live beside the JD as orgs/<company>/notes.md
+function notesPathFor(j) {
+  const src = j.jd_path || j.letter;
+  if (!src || !src.includes('/')) return null;
+  return `${src.slice(0, src.lastIndexOf('/'))}/notes.md`;
+}
+
+// short source chip for a listing URL: LinkedIn -> LI, Seek -> SEEK, ATS boards -> their code,
+// anything else (an employer's own careers page) -> SITE. Full host goes in the tooltip.
+const LISTING_SOURCES = [
+  [/(^|\.)linkedin\.com$/, 'LI'],
+  [/(^|\.)seek\.com(\.au)?$/, 'SEEK'],
+  [/(^|\.)greenhouse\.io$/, 'GH'],
+  [/(^|\.)lever\.co$/, 'LEVER'],
+  [/(^|\.)smartrecruiters\.com$/, 'SR'],
+  [/(^|\.)myworkdayjobs\.com$/, 'WD'],
+  [/(^|\.)workable\.com$/, 'WK'],
+  [/(^|\.)bamboohr\.com$/, 'BHR'],
+];
+
+function listingChip(url) {
+  let host;
+  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
+  const label = LISTING_SOURCES.find(([re]) => re.test(host))?.[1] || 'SITE';
+  return `<a class="src-chip" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(host)}">${escapeHtml(label)}</a>`;
+}
+
+// internal link that opens in-app (delegated via .jd-link) but still has a real href
+function fileLink(path, text, cls = '') {
+  return `<a class="jd-link${cls ? ' ' + cls : ''}" href="${escapeAttr(toHref(path))}" data-path="${escapeAttr(path)}">${escapeHtml(text)}</a>`;
 }
 
 function jobSearchBlob(j) {
@@ -77,7 +147,17 @@ function renderJobsTable(text) {
   let data;
   try { data = window.jsyaml.load(text); } catch { return false; }
   if (!data || !Array.isArray(data.jobs)) return false;
-  jobsState = { all: data.jobs, sortKey: null, sortDir: 1, query: '', groupBy: 'status', collapsed: new Set() };
+  // carry view state across re-renders so an SSE live-reload doesn't collapse open rows or reset sort
+  const prev = jobsState;
+  jobsState = {
+    all: data.jobs,
+    sortKey: prev?.sortKey ?? 'company',
+    sortDir: prev?.sortDir ?? 1,
+    query: prev?.query ?? '',
+    groupBy: prev?.groupBy ?? 'status',
+    collapsed: prev?.collapsed ?? new Set(),
+    expanded: prev?.expanded ?? new Set(),
+  };
   contentEl.className = 'content jobs';
   contentEl.innerHTML =
     '<div class="jobs-toolbar">'
@@ -89,8 +169,9 @@ function renderJobsTable(text) {
     + '<span id="jobs-count" class="jobs-count"></span></div>'
     + '<div class="jobs-table-wrap"><table class="jobs-table"><thead><tr>'
     + JOB_COLS.map((c) => `<th data-key="${c.key}">${c.label}</th>`).join('')
-    + '<th>Links</th></tr></thead><tbody></tbody></table></div>';
+    + '</tr></thead><tbody></tbody></table></div>';
   const searchInput = contentEl.querySelector('#jobs-search');
+  searchInput.value = jobsState.query;
   searchInput.addEventListener('input', () => { jobsState.query = searchInput.value.trim().toLowerCase(); paintJobs(); });
   const groupSel = contentEl.querySelector('#jobs-group');
   groupSel.value = jobsState.groupBy;
@@ -109,25 +190,44 @@ function renderJobsTable(text) {
 
 const TIER_ORDER = ['A', 'B', 'C', 'D', 'out', 'older'];
 const STATUS_ORDER = ['applied', 'ready', 'drafted', 'open', 'held', 'inbound', 'unassessed', 'rejected', 'closed', 'skip', 'stale', 'out'];
-const NCOLS = JOB_COLS.length + 1;
+const NCOLS = JOB_COLS.length;
 
 function jobRowHtml(j) {
+  const notes = notesPathFor(j);
+  const company = j.company || '';
+  const role = j.role || '';
+  const status = j.status || '';
+
+  const companyCell = hasFile(notes) ? fileLink(notes, company, 'notes-link') : escapeHtml(company);
+
+  let roleCell = hasFile(j.jd_path) ? fileLink(j.jd_path, role, 'jd-role') : escapeHtml(role);
+  if (j.listing_url) roleCell += ` ${listingChip(j.listing_url)}`;
+
+  let statusCell = `<span class="badge st-${escapeAttr(status)}">${escapeHtml(status)}</span>`;
+  if (hasFile(j.letter)) statusCell += ` ${fileLink(j.letter, 'CL', 'cl-link')}`;
+
+  const detail = detailHtml(j);
+  const key = jobKey(j);
+  const open = jobsState.expanded.has(key);
+  const caret = detail ? `<span class="row-caret">${open ? '▾' : '▸'}</span>` : '<span class="row-caret empty"></span>';
+
   const cells = [
-    escapeHtml(j.company || ''),
-    escapeHtml(j.role || ''),
-    `<span class="badge st-${escapeAttr(j.status || '')}">${escapeHtml(j.status || '')}</span>`,
+    caret + companyCell,
+    roleCell,
+    statusCell,
     escapeHtml(j.tier || ''),
     escapeHtml(j.location || ''),
     escapeHtml(j.work_mode || ''),
-    escapeHtml(cultureText(j)),
     escapeHtml(j.comp || ''),
-    (j.flags || []).map((f) => `<span class="flag">${escapeHtml(f)}</span>`).join(' '),
+    escapeHtml(cultureText(j)),
   ];
-  let jd = '';
-  if (j.jd_path) jd += `<a class="jd-link" data-path="${escapeAttr(j.jd_path)}">JD</a> `;
-  if (j.letter) jd += `<a class="jd-link cl-link" data-path="${escapeAttr(j.letter)}">CL</a> `;
-  if (j.listing_url) jd += `<a href="${escapeAttr(j.listing_url)}" target="_blank" rel="noopener">↗</a>`;
-  return `<tr class="jobs-row" title="${escapeAttr(j.summary || '')}">${cells.map((c) => `<td>${c}</td>`).join('')}<td class="jd-cell">${jd}</td></tr>`;
+
+  let html = `<tr class="jobs-row${detail ? ' has-detail' : ''}${open ? ' open' : ''}" data-key="${escapeAttr(key)}">`
+    + cells.map((c) => `<td>${c}</td>`).join('') + '</tr>';
+  if (detail && open) {
+    html += `<tr class="detail-row" data-key="${escapeAttr(key)}"><td colspan="${NCOLS}">${detail}</td></tr>`;
+  }
+  return html;
 }
 
 function groupKeyOf(j) {
@@ -194,7 +294,15 @@ function paintJobs() {
       paintJobs();
     }));
   }
-  tbody.querySelectorAll('.jd-link').forEach((a) => a.addEventListener('click', () => openFile(a.dataset.path)));
+  // click a row to reveal its detail line; links inside the row keep their own behaviour
+  tbody.querySelectorAll('.jobs-row.has-detail').forEach((tr) => tr.addEventListener('click', (e) => {
+    if (e.target.closest('a')) return;
+    const k = tr.dataset.key;
+    if (jobsState.expanded.has(k)) jobsState.expanded.delete(k);
+    else jobsState.expanded.add(k);
+    paintJobs();
+  }));
+  tbody.querySelectorAll('.jd-link').forEach((a) => a.addEventListener('click', navHandler(() => openFile(a.dataset.path))));
   contentEl.querySelector('#jobs-count').textContent = `${rows.length} / ${all.length}`;
 }
 
@@ -242,8 +350,9 @@ function renderTree(nodes, forceOpen) {
       const a = document.createElement('a');
       a.className = 'file';
       a.dataset.path = node.path;
+      a.href = toHref(node.path);
       a.textContent = `${ICONS[node.ext] || '•'} ${node.name}`;
-      a.addEventListener('click', () => openFile(node.path));
+      a.addEventListener('click', navHandler(() => openFile(node.path)));
       li.append(a);
     }
     ul.append(li);
@@ -315,7 +424,8 @@ function renderCrumbs(path) {
     return;
   }
   const root = document.createElement('a'); root.textContent = 'jobs';
-  root.addEventListener('click', () => openFile('jobs.yaml'));
+  root.href = toHref('jobs.yaml');
+  root.addEventListener('click', navHandler(() => openFile('jobs.yaml')));
   crumbsEl.append(root);
   const parts = path.split('/');
   let prefix = '';
@@ -328,26 +438,28 @@ function renderCrumbs(path) {
     } else {
       const dp = prefix;
       const a = document.createElement('a'); a.textContent = part;
-      a.addEventListener('click', () => openDir(dp));
+      a.href = toHref(dp);
+      a.addEventListener('click', navHandler(() => openDir(dp)));
       crumbsEl.append(a);
     }
   });
 }
 
 // ---- folder index ----
-function openDir(path) {
+function openDir(path, { push = true } = {}) {
   current = { path: path || '', type: 'dir' };
+  syncUrl(path || '', push);
   const nodes = path ? (findNode(path)?.children || []) : treeData;
   renderCrumbs(path);
   document.title = path ? path.split('/').pop() : 'jobs';
   const items = nodes.map((n) => {
     const icon = n.type === 'dir' ? '📁' : (ICONS[n.ext] || '•');
-    return `<li><a data-path="${escapeHtml(n.path)}" data-type="${n.type}">${icon} ${escapeHtml(n.name)}</a></li>`;
+    return `<li><a href="${escapeHtml(toHref(n.path))}" data-path="${escapeHtml(n.path)}" data-type="${n.type}">${icon} ${escapeHtml(n.name)}</a></li>`;
   }).join('');
   contentEl.className = 'content dir-index';
   contentEl.innerHTML = `<h1>📁 ${path ? escapeHtml(path) : 'jobs'}</h1><ul>${items || '<li class="empty">empty</li>'}</ul>`;
   contentEl.querySelectorAll('a').forEach((a) => {
-    a.addEventListener('click', () => (a.dataset.type === 'dir' ? openDir(a.dataset.path) : openFile(a.dataset.path)));
+    a.addEventListener('click', navHandler(() => (a.dataset.type === 'dir' ? openDir(a.dataset.path) : openFile(a.dataset.path))));
   });
   contentEl.scrollTop = 0;
   setSelection();
@@ -355,8 +467,9 @@ function openDir(path) {
 }
 
 // ---- file view ----
-async function openFile(path, { flash = false } = {}) {
+async function openFile(path, { flash = false, push = true } = {}) {
   current = { path, type: 'file' };
+  syncUrl(path, push);
   setSelection();
   revealPath(path);
   renderCrumbs(path);
@@ -399,5 +512,23 @@ function connectLive() {
   };
 }
 
-loadTree().then(() => { if (!current.path) openFile('jobs.yaml'); });
+// ---- routing ----
+// resolve a URL path against the loaded tree; `/` falls through to the board
+function route(path, opts = {}) {
+  if (!path) return openFile('jobs.yaml', opts);
+  const node = findNode(path);
+  if (node?.type === 'dir') return openDir(path, opts);
+  if (node?.type === 'file') return openFile(path, opts);
+  current = { path, type: null };
+  syncUrl(path, opts.push !== false);
+  renderCrumbs(path);
+  document.title = 'not found';
+  contentEl.className = 'content';
+  contentEl.innerHTML = `<div class="plaintext">not found: ${escapeHtml(path)}</div>`;
+  setSelection();
+}
+
+window.addEventListener('popstate', () => route(pathFromUrl(), { push: false }));
+
+loadTree().then(() => route(pathFromUrl(), { push: false }));
 connectLive();

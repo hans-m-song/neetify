@@ -122,7 +122,10 @@ const server = http.createServer(async (req, res) => {
     req.on('close', () => { clearInterval(ping); sseClients.delete(res); });
     return;
   }
-  send(res, 404, 'text/plain', 'not found');
+  // every other route is a client-side path (e.g. /orgs/nearmap/notes.md) -> serve the shell and
+  // let app.js route from location.pathname. Asset and API routes are matched above, and
+  // CONTENT_EXTS excludes .js/.css so content paths cannot shadow them.
+  return serveFile(res, path.join(VIEWER_DIR, 'index.html'), '.html');
 });
 
 server.listen(PORT, () => {

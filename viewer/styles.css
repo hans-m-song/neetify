@@ -207,9 +207,44 @@ iframe.pdf { width: 100%; height: calc(100vh - 120px); border: 1px solid var(--b
 .jobs-table thead th.sorted { color: var(--link); }
 .jobs-table thead th::after { content: attr(data-arrow); color: var(--muted); }
 .jobs-table tbody tr:hover td { background: var(--hover); }
+.jobs-table td:nth-child(1) { white-space: normal; min-width: 150px; }
 .jobs-table td:nth-child(2) { white-space: normal; min-width: 170px; }
-.jd-cell a { color: var(--link); text-decoration: none; }
-.jd-cell a:hover { text-decoration: underline; }
+/* let the two free-text grid fields wrap instead of forcing the table wide */
+.jobs-table td:nth-child(5) { white-space: normal; max-width: 190px; }
+.jobs-table td:nth-child(7) { white-space: normal; max-width: 150px; }
+
+/* expandable detail line: flags / culture note / summary, stacked under the row */
+.jobs-table tr.has-detail { cursor: pointer; }
+.jobs-table tr.jobs-row.open td { border-bottom: 0; }
+.row-caret {
+  display: inline-block; width: 12px; margin-right: 2px;
+  color: var(--muted); font-size: 10px; user-select: none;
+}
+.jobs-table tr.detail-row td {
+  padding: 2px 10px 10px 24px;
+  background: var(--hover);
+  white-space: normal;
+  font-size: 12px; line-height: 1.5;
+}
+.detail-row .d-flags { margin-bottom: 3px; }
+.detail-row .d-culture { color: var(--muted); margin-bottom: 3px; }
+.detail-row .d-summary { color: var(--fg); max-width: 90ch; }
+/* in-table links: company -> notes.md, role -> JD, status -> cover letter, plus the external listing */
+.jobs-table a { color: var(--link); text-decoration: none; }
+.jobs-table a:hover { text-decoration: underline; }
+.jobs-table .src-chip {
+  display: inline-block; padding: 0 5px; border-radius: 8px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+  background: var(--code-bg); color: var(--muted);
+  vertical-align: middle; white-space: nowrap;
+}
+.jobs-table .src-chip:hover { background: var(--link); color: var(--bg); text-decoration: none; }
+.jobs-table .cl-link {
+  display: inline-block; padding: 0 5px; border-radius: 8px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+  border: 1px solid var(--link); vertical-align: middle;
+}
+.jobs-table .cl-link:hover { background: var(--link); color: var(--bg); text-decoration: none; }
 
 .badge {
   display: inline-block; padding: 1px 7px; border-radius: 10px;

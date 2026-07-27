@@ -19,8 +19,8 @@ root=${0:A:h}
 if [ $org = "resume" ]
 then
   workdir=$root
-  filename=resume.tex
-  name=resume
+  filename=${2:-resume.tex}
+  name=$(basename $filename .tex)
 else
   workdir=$root/orgs/$org
 fi

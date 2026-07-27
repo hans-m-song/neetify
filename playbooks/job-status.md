@@ -1,7 +1,6 @@
 ---
 name: job-status
-description: Log a pipeline status change for a company in this job-search workspace. Use when the user reports an application outcome or a letter state, e.g. "X applied", "rejected by X", "applied to X", "X ready/drafted/held/closed", "log status for X". Updates the company's jobs.yaml entry (status + status_date) and the matching handoff-doc line.
-user-invocable: true
+description: Log a pipeline status change for a company in this job-search workspace. Use when the user reports an application outcome or a letter state, e.g. "X applied", "rejected by X", "applied to X", "X ready/drafted/held/closed", "log status for X". Updates the company's jobs.yaml entry (status + status_date) and the matching per-company notes line.
 ---
 
 # job-status — log a pipeline status change
@@ -13,7 +12,8 @@ trail. Fast, mechanical, no letter work.
 
 1. **Find the entry.** `rg -n -i "<company>" jobs.yaml`. If the company has more than one role on the
    board, confirm which role (the user usually means the one most recently actioned). If there is no
-   entry at all, this is a new lead — say so and offer `/assess-lead` instead of inventing a row.
+   entry at all, this is a new lead — say so and offer the `playbooks/assess-lead.md` procedure instead
+   of inventing a row.
 
 2. **Set status + date.** Edit the entry's `status` and `status_date` (today's absolute date,
    `YYYY-MM-DD`). Use the status vocabulary defined in the `jobs.yaml` header comment:
@@ -29,10 +29,10 @@ trail. Fast, mechanical, no letter work.
    almost always an early resume/screen filter, not the letter — worth saying so honestly).
 
 4. **Do not touch `jobs.md`.** It is prose-only (orientation + settled/open decisions); per-role status
-   lives only in `jobs.yaml` (see `CLAUDE.md`).
+   lives only in `jobs.yaml` (see `AGENTS.md`).
 
 5. **Report one line:** company, role, new status, date, and where it was logged.
 
 ## Notes
 - Today's date comes from the session's current-date context, not a guess.
-- This skill never drafts, compiles, or sends anything — it only records state.
+- This procedure never drafts, compiles, or sends anything — it only records state.

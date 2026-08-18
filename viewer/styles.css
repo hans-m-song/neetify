@@ -210,8 +210,8 @@ iframe.pdf { width: 100%; height: calc(100vh - 120px); border: 1px solid var(--b
 .jobs-table td:nth-child(1) { white-space: normal; min-width: 150px; }
 .jobs-table td:nth-child(2) { white-space: normal; min-width: 170px; }
 /* let the two free-text grid fields wrap instead of forcing the table wide */
-.jobs-table td:nth-child(5) { white-space: normal; max-width: 190px; }
-.jobs-table td:nth-child(7) { white-space: normal; max-width: 150px; }
+.jobs-table td:nth-child(6) { white-space: normal; max-width: 190px; }
+.jobs-table td:nth-child(8) { white-space: normal; max-width: 150px; }
 
 /* expandable detail line: flags / culture note / summary, stacked under the row */
 .jobs-table tr.has-detail { cursor: pointer; }

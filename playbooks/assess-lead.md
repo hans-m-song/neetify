@@ -30,13 +30,26 @@ Decide whether a listing is worth pursuing, honestly, before any letter work.
    - Don't auto-drop recruiter-posted or AI-core — flag and try to find the underlying employer/JD
      (note `.claude/memory/feedback_recruiter_aicore_handling.md`).
 
-5. **Present** a concise fit read — a small table (JD wants vs the user) plus the decisive flag — and a
+5. **Check culture before recording the result.** Search the employer generally for recent employee-culture
+   or workforce signals, then search Glassdoor specifically. Record the checked date, Glassdoor rating and
+   review count where available, the recurring sentiment, and any uncertainty. Low-n, non-engineering, or
+   employer-authored material is weak evidence, not confirmation. Do not use Reddit as a required source.
+
+6. **Capture immediately.** Save or update `orgs/<company>/<role-slug>.md` with the direct listing URL,
+   JD text (or the precise reason it could not be obtained), fit notes, culture evidence, and flags. Add or
+   update the corresponding `jobs.yaml` entry before moving on: `open` for a clear fit, `unassessed` when
+   evidence is missing, `out` for a hard filter, `skip` for a deliberate pass, or `stale` for a closed or
+   misrouted listing. If the exact role already exists, update it rather than duplicating it. Capture even
+   negative outcomes; do not capture only obvious search noise that was never opened.
+
+7. **Present** a concise fit read — a small table (JD wants vs the user) plus the decisive flag — and a
    recommended tier (A/B/C/D/out). **Always include the listing link** and any `orgs/` path
    (note `.claude/memory/feedback_link_jds.md`).
 
-6. **Offer the next step:** capture the JD + run the `playbooks/cover-letter.md` procedure, or log it via
-   `playbooks/job-status.md` as `out`/`skip`/`open`. Don't capture or draft unless the user wants to pursue.
+8. **Offer the next step:** run the `playbooks/cover-letter.md` procedure for a pursued role, or change
+   its pipeline status if the user decides. Do not draft, apply, or contact anyone without instruction.
 
 ## Culture lookups (when needed)
-Authenticated Glassdoor works; treat a high rating on very few reviews (low-n) as not meaningful. Reddit
-is blocked at the browser safety layer. (Note `.claude/memory/reference_research_sources.md`.)
+Authenticated Glassdoor works; treat a high rating on very few reviews (low-n) as not meaningful. General
+web and Glassdoor checks are mandatory for each captured lead. Reddit is blocked at the browser safety
+layer. (Note `.claude/memory/reference_research_sources.md`.)

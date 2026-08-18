@@ -59,7 +59,12 @@ function renderFrontmatter(fm) {
     else if (rows.length) rows[rows.length - 1][1] += `\n${line.trim()}`;
     else rows.push(['', line.trim()]);
   }
-  const body = rows.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`).join('');
+  const body = rows.map(([k, v]) => {
+    const key = escapeHtml(k);
+    const value = escapeHtml(v);
+    const asHref = value.startsWith('https://') ? `<a rel="noreferrer" target="_blank" href="${value}">${value}</a>` : value;
+    return `<tr><th>${key}</th><td>${asHref}</td></tr>`;
+  }).join('');
   return `<details class="frontmatter" open><summary>frontmatter</summary><table>${body}</table></details>`;
 }
 const escapeAttr = (s) => escapeHtml(String(s)).replace(/"/g, '&quot;');
@@ -73,6 +78,7 @@ const JOB_COLS = [
   { key: 'company', label: 'Company' },
   { key: 'role', label: 'Role' },
   { key: 'status', label: 'Status' },
+  { key: 'status_date', label: 'Status date', date: true },
   { key: 'tier', label: 'Tier' },
   { key: 'location', label: 'Location' },
   { key: 'work_mode', label: 'Mode' },
@@ -91,6 +97,17 @@ function cultureText(j) {
 }
 
 const jobKey = (j) => `${j.company || ''}|${j.role || ''}`;
+
+function statusDateText(value) {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return value == null ? '' : String(value);
+}
+
+function statusDateValue(value) {
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
 
 // stacked detail lines: flags, then culture note, then the summary that used to be a hover tooltip
 function detailHtml(j) {
@@ -139,7 +156,7 @@ function fileLink(path, text, cls = '') {
 }
 
 function jobSearchBlob(j) {
-  return [j.company, j.role, j.status, j.tier, j.location, j.work_mode, j.comp, j.summary, j.culture_note, (j.flags || []).join(' ')]
+  return [j.company, j.role, j.status, statusDateText(j.status_date), j.tier, j.location, j.work_mode, j.comp, j.summary, j.culture_note, (j.flags || []).join(' ')]
     .filter(Boolean).join(' ').toLowerCase();
 }
 
@@ -215,6 +232,7 @@ function jobRowHtml(j) {
     caret + companyCell,
     roleCell,
     statusCell,
+    escapeHtml(statusDateText(j.status_date)),
     escapeHtml(j.tier || ''),
     escapeHtml(j.location || ''),
     escapeHtml(j.work_mode || ''),
@@ -255,6 +273,13 @@ function paintJobs() {
     rows.sort((a, b) => {
       let va = a[sortKey];
       let vb = b[sortKey];
+      if (col?.date) {
+        va = statusDateValue(va);
+        vb = statusDateValue(vb);
+        if (va == null) return vb == null ? 0 : 1;
+        if (vb == null) return -1;
+        return (va - vb) * sortDir;
+      }
       if (col && col.num) {
         va = va == null ? -Infinity : va;
         vb = vb == null ? -Infinity : vb;

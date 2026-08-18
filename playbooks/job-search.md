@@ -5,8 +5,8 @@ description: Run a fresh job-search pass for this workspace and triage new leads
 
 # job-search — a fresh search run
 
-Find new leads, triage honestly against the board, present the few worth pursuing. Don't re-present
-roles already on file.
+Find new leads, triage honestly against the board, and preserve the result of every distinct listing
+opened. Don't re-present roles already on file.
 
 ## Passes
 
@@ -45,10 +45,12 @@ date-sorted page is all noise, switch to relevance before concluding "nothing ne
   (note `.claude/memory/feedback_recruiter_aicore_handling.md`).
 - Assess survivors against the user filters (see `playbooks/assess-lead.md` / `user.md`).
 
-## Capture each surviving lead
+## Capture each inspected lead, immediately
 
-For every new lead that survives triage (on-target **and** flagged-not-dropped — skip only the noise),
-capture the JD before presenting, same as `playbooks/assess-lead.md` / `playbooks/cover-letter.md` step 1:
+For every distinct listing opened after the check-existing step, capture the JD and pipeline result before
+moving to the next listing. This includes leads assessed as `out`, `skip`, `stale`, or `unassessed`, not
+only promising roles. The record prevents the same bad, expired, misrouted, or hard-excluded lead from
+being rediscovered. Do not capture only obvious search noise that is never opened.
 
 1. Open the listing to get its **direct URL** and full text. LinkedIn search cards don't carry a clean
    per-role URL — click through (or build `/jobs/view/<currentJobId>`) to the single-role page. For
@@ -56,18 +58,24 @@ capture the JD before presenting, same as `playbooks/assess-lead.md` / `playbook
    appear in a backgrounded/unscrolled tab — click the page and scroll down to force it to render**, then
    read the page text. If it still won't render, find the underlying JD on the company careers/ATS site
    (note `.claude/memory/feedback_recruiter_aicore_handling.md`).
-2. Save `orgs/<company>/<role-slug>.md` with the standard frontmatter
+2. Run a culture check before saving: search the company generally for recent employee-culture or
+   workforce signals, then search Glassdoor specifically. Record the checked date, rating and review count
+   where available, the recurring sentiment, and the uncertainty (especially low review counts or
+   non-engineering reviews). Do not treat company marketing as independent culture evidence.
+3. Save `orgs/<company>/<role-slug>.md` with the standard frontmatter
    (`company`/`role`/`location`/`work`/`seniority`/`comp`/`source`/`listing_url`/`job_id`/`captured`/
    `culture`/`flags`) plus a short fit-notes body — match an existing JD file as the shape reference.
-3. Add a `jobs.yaml` entry: `status: open` (clear on-target) or `unassessed` (borderline / flagged),
-   with `tier`, `jd_path`, `listing_url`, `flags`. Don't double-capture anything already on the board.
+4. Add or update the `jobs.yaml` entry immediately: use `open` (clear on-target), `unassessed`
+   (insufficient evidence), `out` (fails a hard filter), `skip` (deliberately not pursuing), or `stale`
+   (expired/misrouted). Include `tier`, `jd_path`, `listing_url`, `flags`, and the culture finding. If the
+   exact role is already on file, update that entry with the new listing and assessment; do not duplicate it.
 
 Always capture the **direct listing URL**, not just the search-results URL (note `.claude/memory/feedback_link_jds.md`).
 
 ## Present
 
-One table of the now-captured new leads: company · role · loc/mode · why-look · flag · link (listing URL
-+ `orgs/` path). Note which look strongest and why. Offer to run `playbooks/cover-letter.md` on the
-standouts. Don't double-capture anything already on the board.
+One table of the now-captured leads: company · role · loc/mode · recommendation · culture signal · link
+(listing URL + `orgs/` path). Note which look strongest and why. Offer to run
+`playbooks/cover-letter.md` on the standouts. Capturing is mandatory; drafting or applying is not.
 
 Sources/reliability: notes `.claude/memory/reference_research_sources.md` + `.claude/memory/feedback_job_sources.md`.

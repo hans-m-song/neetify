@@ -15,20 +15,25 @@ fi
 
 # repo root = directory containing this script (portable, no hardcoded paths)
 root=${0:A:h}
+local_dir=$root
+docker_dir=/workdir
+
 
 if [ $org = "resume" ]
 then
-  workdir=$root
+  local_dir=$root
+  docker_dir=/workdir
   filename=${2:-resume.tex}
   name=$(basename $filename .tex)
 else
-  workdir=$root/orgs/$org
+  local_dir=$root/orgs/$org
+  docker_dir=/workdir/orgs/$org
 fi
 
-echo "rendering $workdir/$filename"
+echo "rendering $local_dir/$filename"
 
 # lastpage needs two passes to resolve \pageref{LastPage}
-if grep -q 'usepackage.*lastpage' $workdir/$filename
+if grep -q 'usepackage.*lastpage' $local_dir/$filename
 then
   passes=2
 else
@@ -37,8 +42,8 @@ fi
 
 repeat $passes
 do
-  docker run --rm --volume $workdir:/workdir --workdir /workdir texlive/texlive pdflatex $filename
+  docker run --rm --volume $root:/workdir --workdir /workdir texlive/texlive pdflatex -output-directory=$docker_dir $docker_dir/$filename
 done
 
 echo "cleaning up"
-rm -f $workdir/$name.log $workdir/$name.aux $workdir/$name.out $workdir/texput.log
+rm -f $local_dir/$name.log $local_dir/$name.aux $local_dir/$name.out $local_dir/texput.log
